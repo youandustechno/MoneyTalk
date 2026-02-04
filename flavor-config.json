@@ -1,0 +1,14 @@
+{
+  "flavors": [
+    {
+      "appName": "First Flavor App",
+      "key": "first",
+      "applicationId": "com.example.firstapp"
+    },
+    {
+      "appName": "Second Flavor App",
+      "key": "second",
+      "applicationId": "com.example.secondapp"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -26,20 +28,51 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }
+
+    flavorDimensions += "version"
+
+    // Read and parse JSON file
+    val flavorConfigFile = file("${rootProject.projectDir}/flavor-config.json")
+    val jsonSlurper = JsonSlurper()
+    val flavorConfig = jsonSlurper.parse(flavorConfigFile) as Map<String, Any>
+    val flavors = flavorConfig["flavors"] as List<Map<String, Any>>
+
+    productFlavors {
+        flavors.forEach { flavor ->
+            create(flavor["key"] as String) {
+                dimension = "version"
+
+                // Set unique application ID for each flavor
+                applicationId = flavor["applicationId"] as String
+
+                versionNameSuffix = "-${flavor["key"]}"
+
+                // Set app name from JSON
+                resValue("string", "app_name", flavor["appName"] as String)
+
+                // Add build config fields
+                buildConfigField("String", "FLAVOR_KEY", "\"${flavor["key"]}\"")
+                buildConfigField("String", "FLAVOR_NAME", "\"${flavor["appName"]}\"")
+            }
+        }
+    }
+
     buildFeatures {
         viewBinding = true
+        buildConfig = true  // Add this to enable BuildConfig generation
     }
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
