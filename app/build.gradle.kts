@@ -40,10 +40,35 @@ android {
 
     flavorDimensions += "version"
 
-    // Read and parse JSON file
+    // Read and parse JSON file with error handling
     val flavorConfigFile = file("${rootProject.projectDir}/flavor-config.json")
+
+    if (!flavorConfigFile.exists()) {
+        throw GradleException("flavor-config.json not found at: ${flavorConfigFile.absolutePath}")
+    }
+
+    // Read file content as string first to check for issues
+    val jsonContent = flavorConfigFile.readText(Charsets.UTF_8).trim()
+
+    if (jsonContent.isEmpty()) {
+        throw GradleException("flavor-config.json is empty!")
+    }
+
+    // Check for null bytes
+    if (jsonContent.contains('\u0000')) {
+        throw GradleException("flavor-config.json contains null bytes! File may be corrupted.")
+    }
+
+    println("JSON content length: ${jsonContent.length}")
+    println("First 100 chars: ${jsonContent.take(100)}")
+
     val jsonSlurper = JsonSlurper()
-    val flavorConfig = jsonSlurper.parse(flavorConfigFile) as Map<String, Any>
+    val flavorConfig = try {
+        jsonSlurper.parseText(jsonContent) as Map<String, Any>
+    } catch (e: Exception) {
+        throw GradleException("Failed to parse flavor-config.json: ${e.message}\nContent: ${jsonContent.take(200)}")
+    }
+
     val flavors = flavorConfig["flavors"] as List<Map<String, Any>>
 
     productFlavors {
@@ -68,7 +93,7 @@ android {
 
     buildFeatures {
         viewBinding = true
-        buildConfig = true  // Add this to enable BuildConfig generation
+        buildConfig = true
     }
 }
 

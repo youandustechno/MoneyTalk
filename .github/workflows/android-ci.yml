@@ -3,8 +3,6 @@ name: Android CI
 on:
   push:
     branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -15,25 +13,51 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Decode and create flavor config
+      - name: Create and validate flavor config
         env:
           FLAVOR_CONFIG_BASE64: ${{ secrets.FLAVOR_CONFIG_BASE64 }}
         run: |
-          echo "Decoding flavor configuration..."
-          # Remove any whitespace/newlines from base64 string
-          echo "$FLAVOR_CONFIG_BASE64" | tr -d '\n\r\t ' | base64 -d > flavor-config.json
+          echo "Step 1: Decode base64"
+          echo "$FLAVOR_CONFIG_BASE64" | tr -d '[:space:]' | base64 -d > flavor-config.json
           
-          echo "✓ flavor-config.json created"
-          echo "Content:"
+          echo ""
+          echo "Step 2: Check file"
+          ls -lh flavor-config.json
+          FILE_SIZE=$(wc -c < flavor-config.json)
+          echo "File size: $FILE_SIZE bytes"
+          
+          if [ $FILE_SIZE -eq 0 ]; then
+              echo "ERROR: File is empty!"
+              exit 1
+          fi
+          
+          echo ""
+          echo "Step 3: Check for null bytes"
+          if grep -q $'\x00' flavor-config.json; then
+              echo "ERROR: File contains null bytes!"
+              echo "Hex dump:"
+              hexdump -C flavor-config.json | head -20
+              exit 1
+          else
+              echo "✓ No null bytes"
+          fi
+          
+          echo ""
+          echo "Step 4: Show content"
+          echo "Raw content:"
           cat flavor-config.json
           
           echo ""
-          echo "Validating JSON..."
+          echo "Step 5: Validate JSON"
           if jq empty flavor-config.json 2>/dev/null; then
               echo "✓ Valid JSON"
+              echo ""
+              echo "Formatted JSON:"
+              jq '.' flavor-config.json
           else
-              echo "✗ Invalid JSON - printing hex dump:"
-              hexdump -C flavor-config.json | head -20
+              echo "ERROR: Invalid JSON!"
+              echo "First 500 bytes (hex):"
+              hexdump -C flavor-config.json | head -30
               exit 1
           fi
 
@@ -44,13 +68,14 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Grant execute permission for gradlew
+      - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Build all flavors
-        run: ./gradlew assembleDebug
+      - name: Build with verbose output
+        run: ./gradlew assembleDebug --info --stacktrace
 
       - name: Upload APKs
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: apk-builds
